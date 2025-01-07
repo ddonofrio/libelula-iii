@@ -1,0 +1,21 @@
+name: Spawn
+version: '1.0-SNAPSHOT'
+main: me.libelula.spawn.Spawn
+api-version: '1.21'
+authors:
+  - "Diego D'Onofrio"
+description: "Spigot Server Spawn Control Plugin"
+depend:
+  - WorldGuard
+  - WorldEdit
+permissions:
+  spawn.bypass:
+    description: "Allows the player to bypass spawn restrictions"
+    default: false
+  spawn.admin:
+    description: "Gives admin-level permissions for the Spawn plugin"
+    default: op
+commands:
+  spawn:
+    description: Teleports the player to the spawn point.
+    usage: /spawn

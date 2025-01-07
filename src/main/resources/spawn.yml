@@ -1,0 +1,28 @@
+# Spawn configuration file for the Spawn plugin.
+
+# List of spawnpoints:
+# Each spawnpoint must follow the format:
+#   world,x,y,z,yaw,pitch
+# Example:
+#   world,100.5,64.0,-200.0,90.0,0.0
+spawnpoints: []
+
+# Teleportation mode:
+# Defines how players are teleported to the spawnpoints.
+# Options:
+#   - sequential: Teleports players sequentially through the spawnpoints list.
+#   - shuffle (default): Teleports players to all spawnpoints without repetition
+#                        before starting over, similar to a "shuffle play" mode.
+#   - random: Teleports players to a completely random spawnpoint every time.
+teleport-mode: shuffle
+
+# Spawn region configuration:
+# Defines the world and region name to be protected using WorldGuard.
+# Example:
+#   world: my_world
+#   region: spawn_region
+spawn-region:
+  world: world
+  region: spawn
+
+teleport-delay: 3 # Default delay in seconds before teleporting the player.
