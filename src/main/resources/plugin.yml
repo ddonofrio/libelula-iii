@@ -15,7 +15,51 @@ permissions:
   spawn.admin:
     description: "Gives admin-level permissions for the Spawn plugin"
     default: op
+  spawn.bypass.delay:
+    description: "Allows the player to bypass teleport delay"
+    default: false
+  spawn.player.use.spawn.0:
+    description: "Allows the player to teleport to the first spawn region"
+    default: false
+  spawn.player.use.spawn.1:
+    description: "Allows the player to teleport to the second spawn region"
+    default: false
+  spawn.player.use.spawn.2:
+    description: "Allows the player to teleport to the third spawn region"
+    default: false
+  spawn.player.use.spawn.3:
+    description: "Allows the player to teleport to the fourth spawn region"
+    default: false
+  spawn.player.use.spawn.4:
+    description: "Allows the player to teleport to the fifth spawn region"
+    default: false
+  spawn.player.use.spawn.5:
+    description: "Allows the player to teleport to the sixth spawn region"
+    default: false
+  spawn.player.use.spawn.6:
+    description: "Allows the player to teleport to the seventh spawn region"
+    default: false
+  spawn.player.use.spawn.7:
+    description: "Allows the player to teleport to the eighth spawn region"
+    default: false
+  spawn.player.use.spawn.8:
+    description: "Allows the player to teleport to the ninth spawn region"
+    default: false
+  spawn.player.use.spawn.9:
+    description: "Allows the player to teleport to the tenth spawn region"
+    default: false
 commands:
   spawn:
     description: Teleports the player to the spawn point.
     usage: /spawn
+    aliases: []
+    permission: spawn.player.use
+    permission-message: "§cYou do not have permission to use this command."
+    description-extended: |
+      User Commands:
+        /spawn - Teleport to the highest spawn point allowed by your permissions.
+      Admin Commands:
+        /spawn addsp - Add a new spawn point in the current region.
+        /spawn clear - Clear all spawn points in the current region.
+        /spawn allow - (Demo) Allow certain block interactions.
+        /spawn allow-command - (Demo) Allow certain commands here.

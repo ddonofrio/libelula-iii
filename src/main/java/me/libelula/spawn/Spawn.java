@@ -14,10 +14,8 @@ public final class Spawn extends JavaPlugin {
     private ConfigManager configManager;
     private PermissionManager permissionManager;
     private SpawnPointManager spawnPointManager;
-    private RegionManager regionManager;
+    private SpawnRegionManager regionManager;
     private CommandManager commandManager;
-    private SpawnSetup spawnSetup;
-
 
     @Override
     public void onEnable() {
@@ -36,11 +34,9 @@ public final class Spawn extends JavaPlugin {
 
         configManager = new ConfigManager(this);
         permissionManager = new PermissionManager();
-        configManager.loadConfig();
         spawnPointManager = new SpawnPointManager(this);
-        regionManager = new RegionManager(this);
+        regionManager = new SpawnRegionManager(this);
         commandManager = new CommandManager(this);
-        spawnSetup = new SpawnSetup(this);
 
         getServer().getPluginManager().registerEvents(new EventManager(this), this);
     }
@@ -90,7 +86,7 @@ public final class Spawn extends JavaPlugin {
         return spawnPointManager;
     }
 
-    public RegionManager getRegionManager() {
+    public SpawnRegionManager getRegionManager() {
         return regionManager;
     }
 
@@ -98,7 +94,4 @@ public final class Spawn extends JavaPlugin {
         return commandManager;
     }
 
-    public SpawnSetup getSpawnSetup() {
-        return spawnSetup;
-    }
 }

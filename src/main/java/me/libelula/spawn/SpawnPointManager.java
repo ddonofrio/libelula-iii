@@ -1,95 +1,140 @@
 package me.libelula.spawn;
 
-import org.bukkit.Bukkit;
+import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import org.bukkit.Location;
-import org.bukkit.entity.Player;
+import org.bukkit.World;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
-import java.util.Random;
+import java.util.*;
 
 public class SpawnPointManager {
 
     private final Spawn plugin;
-    private Queue<Location> sequentialQueue;
-    private final Random random;
+    private final Map<String, List<Location>> regionSpawnPoints = new HashMap<>();
+    // Used to track last index for sequential/shuffle modes
+    private final Map<String, Integer> regionIndexes = new HashMap<>();
+    // Shuffle data
+    private final Map<String, List<Location>> regionShuffleOrder = new HashMap<>();
+
     private String teleportMode;
+    private int teleportYOffset;
 
     public SpawnPointManager(Spawn plugin) {
         this.plugin = plugin;
-        this.random = new Random();
-        loadConfiguration();
+        reloadData();
     }
 
-    public void loadConfiguration() {
-        ConfigManager configManager = plugin.getConfigManager();
-        this.teleportMode = configManager.getConfig().getString("teleport-mode", "shuffle").toLowerCase();
+    /**
+     * Reloads data from config (teleport mode, offset, spawnPoints).
+     */
+    public void reloadData() {
+        this.teleportMode = plugin.getConfigManager().getTeleportMode();
+        this.teleportYOffset = plugin.getConfigManager().getTeleportYOffset();
+        regionSpawnPoints.clear();
+        regionIndexes.clear();
+        regionShuffleOrder.clear();
 
-        if (teleportMode.equals("sequential") || teleportMode.equals("shuffle")) {
-            this.sequentialQueue = new LinkedList<>(configManager.getSpawnPoints());
+        // Cache spawn regions in memory
+        for (SpawnRegion sr : plugin.getConfigManager().getSpawnRegions()) {
+            String regionId = sr.getRegion().getId();
+            List<Location> spawns = sr.getSpawnPoints();
+            regionSpawnPoints.put(regionId, spawns);
+            regionIndexes.put(regionId, 0);
+            regionShuffleOrder.put(regionId, new ArrayList<>(spawns));
+            // Pre-shuffle once for "shuffle" mode
+            Collections.shuffle(regionShuffleOrder.get(regionId));
         }
+        plugin.getLogger().info("SpawnPointManager data reloaded.");
     }
 
-    public void handlePlayerJoin(Player player, PermissionManager permissionManager) {
-        if (!plugin.getConfigManager().getSpawnPoints().isEmpty()) {
-            if (permissionManager.isAdmin(player)) {
-                player.sendMessage("§cNo spawn configured. Please type §e/spawn setup§c to configure.");
-            }
-            return;
+    /**
+     * Returns the next spawn point based on teleport mode and offset.
+     * If region not found or no spawns, returns fallback.
+     */
+    public Location getNextSpawnPoint(String regionName, Location fallback) {
+        List<Location> spawns = regionSpawnPoints.get(regionName);
+        if (spawns == null || spawns.isEmpty()) {
+            return fallback;
         }
-
-        if (!permissionManager.hasBypassPermission(player)) {
-            teleportPlayer(player);
-        }
-    }
-
-    public void teleportPlayer(Player player) {
-        List<Location> spawnPoints = plugin.getConfigManager().getSpawnPoints();
-
-        if (spawnPoints.isEmpty()) {
-            plugin.getLogger().warning("No spawnpoints configured. Cannot teleport player.");
-            return;
-        }
-
-        Location spawnPoint = null;
-
         switch (teleportMode) {
             case "sequential":
-                if (sequentialQueue.isEmpty()) {
-                    sequentialQueue.addAll(spawnPoints);
-                }
-                spawnPoint = sequentialQueue.poll();
-                break;
-
-            case "shuffle":
-                if (sequentialQueue.isEmpty()) {
-                    sequentialQueue.addAll(spawnPoints);
-                }
-                spawnPoint = pickRandomFromQueue();
-                break;
-
+                return getSequentialSpawn(regionName, spawns, fallback);
             case "random":
+                return getRandomSpawn(spawns, fallback);
+            case "shuffle":
             default:
-                spawnPoint = spawnPoints.get(random.nextInt(spawnPoints.size()));
-                break;
-        }
-
-        if (spawnPoint != null) {
-            Location finalSpawnPoint = spawnPoint;
-            Bukkit.getScheduler().runTaskLater(plugin, () -> player.teleport(finalSpawnPoint), 2L);
+                return getShuffleSpawn(regionName, spawns, fallback);
         }
     }
 
-    private Location pickRandomFromQueue() {
-        int randomIndex = random.nextInt(sequentialQueue.size());
-        Location[] queueArray = sequentialQueue.toArray(new Location[0]);
-        Location selected = queueArray[randomIndex];
-        sequentialQueue.remove(selected);
-        return selected;
+    /**
+     * Retrieves spawnpoints for a region.
+     */
+    public List<Location> getSpawnPoints(String regionName) {
+        List<Location> spawns = regionSpawnPoints.get(regionName);
+        return (spawns == null) ? Collections.emptyList() : Collections.unmodifiableList(spawns);
     }
 
-    public boolean isConfigurationValid() {
-        return !plugin.getConfigManager().getSpawnPoints().isEmpty();
+    /**
+     * Sets (adds) a new spawn point to a region,
+     * updates config and reloads data in memory.
+     */
+    public void setSpawnPoint(String regionName, Location loc) {
+        World w = loc.getWorld();
+        // Attempt to find a matching region from config
+        ProtectedRegion pr = plugin.getRegionManager().getRegionForLocation(loc);
+        if (pr == null || !pr.getId().equals(regionName)) {
+            // Check if regionName is valid in config
+            if (!regionSpawnPoints.containsKey(regionName)) {
+                plugin.getLogger().warning("No such region in config: " + regionName);
+                return;
+            }
+        }
+        plugin.getConfigManager().addSpawnPoint(w, regionName, loc);
+        // Refresh local cache
+        reloadData();
+        plugin.getLogger().info("Spawn point set for region " + regionName);
+    }
+
+    // ================== Mode-Specific Helpers ===================
+    private Location getSequentialSpawn(String regionName, List<Location> spawns, Location fallback) {
+        int idx = regionIndexes.getOrDefault(regionName, 0);
+        if (idx >= spawns.size()) {
+            idx = 0;
+        }
+        Location base = spawns.get(idx);
+        regionIndexes.put(regionName, idx + 1);
+        return applyOffset(base, fallback);
+    }
+
+    private Location getRandomSpawn(List<Location> spawns, Location fallback) {
+        Location base = spawns.get(new Random().nextInt(spawns.size()));
+        return applyOffset(base, fallback);
+    }
+
+    private Location getShuffleSpawn(String regionName, List<Location> spawns, Location fallback) {
+        List<Location> shuffle = regionShuffleOrder.getOrDefault(regionName, new ArrayList<>());
+        if (shuffle.isEmpty()) {
+            // Rebuild shuffle list if empty
+            regionShuffleOrder.put(regionName, new ArrayList<>(spawns));
+            shuffle = regionShuffleOrder.get(regionName);
+            Collections.shuffle(shuffle);
+        }
+        Location base = shuffle.remove(0);
+        return applyOffset(base, fallback);
+    }
+
+    /**
+     * Applies Y offset to the given spawn location, or returns fallback if null.
+     */
+    private Location applyOffset(Location base, Location fallback) {
+        if (base == null) {
+            return fallback;
+        }
+        return new Location(base.getWorld(),
+                base.getX(),
+                base.getY() + teleportYOffset,
+                base.getZ(),
+                base.getYaw(),
+                base.getPitch());
     }
 }
