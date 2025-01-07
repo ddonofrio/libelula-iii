@@ -17,6 +17,8 @@ import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.*;
 
+import java.util.List;
+
 public class EventManager implements Listener {
 
     private final Spawn plugin;
@@ -26,11 +28,33 @@ public class EventManager implements Listener {
     }
 
     // Player Events
+
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        plugin.getSpawnPointManager().handlePlayerJoin(player, plugin.getPermissionManager());
+        if (plugin.getPermissionManager().hasBypassPermission(player)) {
+            return; // Do nothing if the player has bypass permission
+        }
+
+        int highestSpawn = plugin.getPermissionManager().getHighestSpawnPermission(player);
+        List<SpawnRegion> regions = plugin.getConfigManager().getSpawnRegions();
+
+        if (highestSpawn == -1 || regions.isEmpty()) {
+            // no valid spawnpoint cofigured.
+            return;
+        }
+
+        if (highestSpawn >= regions.size()) {
+            highestSpawn = regions.size() - 1; // Adjust to the last valid spawn
+        }
+
+        SpawnRegion targetRegion = regions.get(highestSpawn);
+        Location spawnLocation = plugin.getSpawnPointManager()
+                .getNextSpawnPoint(targetRegion.getRegion().getId(), player.getLocation());
+
+        player.teleport(spawnLocation);
     }
+
 
     @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
@@ -45,20 +69,6 @@ public class EventManager implements Listener {
     public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
         String message = event.getMessage().toLowerCase();
-
-        if (plugin.getSpawnSetup().isUserInSetup(player)) {
-            if (message.equals("/spawn end")) {
-                event.setCancelled(true);
-                plugin.getSpawnSetup().endSetup(player);
-            } else if (message.equals("/spawn next")) {
-                event.setCancelled(true);
-                plugin.getCommandManager().processCommand(player, message);
-            } else if (!message.startsWith("/spawn")) {
-                event.setCancelled(true);
-                player.sendMessage("§cYou are in setup mode. Use §e/spawn end §cto abort setup.");
-            }
-            return;
-        }
 
         if (message.startsWith("/spawn")) {
             event.setCancelled(true);
@@ -195,12 +205,6 @@ public class EventManager implements Listener {
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
-
-        if (plugin.getSpawnSetup().isUserInSetup(player)) {
-            event.setCancelled(true);
-            plugin.getSpawnSetup().addSpawnPoint(player, event.getBlock().getLocation());
-            return;
-        }
 
         if (!plugin.getPermissionManager().isAdmin(player) &&
                 plugin.getRegionManager().isLocationInSpawn(event.getBlock().getLocation())) {

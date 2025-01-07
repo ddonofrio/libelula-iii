@@ -14,177 +14,222 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class ConfigManager {
 
     private final Spawn plugin;
     private File configFile;
     private FileConfiguration config;
-    private List<Location> spawnPoints;
-    private World spawnWorld;
-    private ProtectedRegion spawnRegion;
-    private int teleportDelay;
+
+    private List<SpawnRegion> spawnRegions = new ArrayList<>();
+    private String teleportMode = "shuffle";
+    private int teleportDelay = 3;
+    private int teleportYOffset = 1;
 
     public ConfigManager(Spawn plugin) {
         this.plugin = plugin;
-        this.spawnPoints = new ArrayList<>();
+        loadConfig();
+        validateConfig();
     }
 
     public void loadConfig() {
         configFile = new File(plugin.getDataFolder(), "spawn.yml");
         if (!configFile.exists()) {
-            copyDefaultConfig();
+            plugin.getLogger().info("Creating default configuration file...");
+            createDefaultConfig();
         }
         config = YamlConfiguration.loadConfiguration(configFile);
-        plugin.getLogger().info("Configuration loaded.");
-        verifyRegionConfig();
-        verifyTeleportMode();
+        plugin.getLogger().info("Configuration loaded from spawn.yml.");
+
+        loadSpawnRegions();
+        teleportMode = config.getString("teleport-mode", "shuffle");
         teleportDelay = config.getInt("teleport-delay", 3);
-        loadSpawnPoints();
+        teleportYOffset = config.getInt("teleport-y-offset", 1);
     }
 
-    private void copyDefaultConfig() {
+    private void createDefaultConfig() {
         try (InputStream in = plugin.getResource("spawn.yml")) {
             if (in == null) {
-                plugin.getLogger().severe("Default configuration file not found in resources.");
+                plugin.getLogger().severe("Default config not found in resources!");
                 return;
             }
-            Files.copy(in, configFile.toPath());
-            plugin.getLogger().info("Default configuration 'spawn.yml' created.");
+            Files.copy(in, new File(plugin.getDataFolder(), "spawn.yml").toPath());
+            plugin.getLogger().info("Default config file created.");
         } catch (IOException e) {
-            plugin.getLogger().severe("Could not copy default configuration: " + e.getMessage());
+            plugin.getLogger().severe("Could not create default config: " + e.getMessage());
         }
     }
 
-    private void loadSpawnPoints() {
-        spawnPoints.clear();
-        List<?> rawPoints = config.getList("spawnpoints");
-        if (rawPoints != null) {
-            for (Object point : rawPoints) {
-                if (point instanceof String) {
-                    String[] parts = ((String) point).split(",");
-                    if (parts.length == 6) {
-                        try {
-                            World world = Bukkit.getWorld(parts[0]);
-                            double x = Double.parseDouble(parts[1]);
-                            double y = Double.parseDouble(parts[2]);
-                            double z = Double.parseDouble(parts[3]);
-                            float yaw = Float.parseFloat(parts[4]);
-                            float pitch = Float.parseFloat(parts[5]);
-                            if (world != null) {
+    private void loadSpawnRegions() {
+        spawnRegions.clear();
+        List<Map<?, ?>> regionsConfig = config.getMapList("spawn-regions");
+        for (Map<?, ?> regionData : regionsConfig) {
+            if (!(regionData.containsKey("world") && regionData.containsKey("region"))) {
+                plugin.getLogger().warning("Incomplete region data, skipping...");
+                continue;
+            }
+            String worldName = regionData.get("world").toString();
+            String regionName = regionData.get("region").toString();
+            World world = Bukkit.getWorld(worldName);
+            if (world == null) {
+                plugin.getLogger().warning("World not found: " + worldName + ", skipping...");
+                continue;
+            }
+            RegionManager regionManager = WorldGuard.getInstance()
+                    .getPlatform().getRegionContainer()
+                    .get(BukkitAdapter.adapt(world));
+            if (regionManager == null) {
+                plugin.getLogger().warning("No RegionManager for " + worldName + ", skipping...");
+                continue;
+            }
+            ProtectedRegion protectedRegion = regionManager.getRegion(regionName);
+            if (protectedRegion == null) {
+                plugin.getLogger().warning("Region not found: " + regionName + ", skipping...");
+                continue;
+            }
+            List<Location> spawnPoints = new ArrayList<>();
+            Object rawPointsObj = regionData.get("spawnpoints");
+            if (rawPointsObj instanceof List<?> rawPoints) {
+                for (Object point : rawPoints) {
+                    if (point instanceof String) {
+                        String[] parts = ((String) point).split(",");
+                        if (parts.length >= 5) {
+                            try {
+                                double x = Double.parseDouble(parts[0]);
+                                double y = Double.parseDouble(parts[1]);
+                                double z = Double.parseDouble(parts[2]);
+                                float yaw = Float.parseFloat(parts[3]);
+                                float pitch = Float.parseFloat(parts[4]);
                                 spawnPoints.add(new Location(world, x, y, z, yaw, pitch));
+                            } catch (NumberFormatException e) {
+                                plugin.getLogger().warning("Invalid spawn point: " + point);
                             }
-                        } catch (NumberFormatException e) {
-                            plugin.getLogger().warning("Invalid spawn point format: " + point);
                         }
                     }
                 }
             }
+            spawnRegions.add(new SpawnRegion(world, protectedRegion, spawnPoints));
+            plugin.getLogger().info("Loaded region " + regionName + " in " + worldName);
         }
     }
 
-    public List<Location> getSpawnPoints() {
-        return new ArrayList<>(spawnPoints);
-    }
-
-    public void addSpawnPoint(Location location) {
-        spawnPoints.add(location);
-        saveSpawnPoints();
-    }
-
-    public void clearSpawnPoints() {
-        spawnPoints.clear();
-        saveSpawnPoints();
-    }
-
-    private void saveSpawnPoints() {
-        List<String> rawPoints = new ArrayList<>();
-        for (Location location : spawnPoints) {
-            String formattedLocation = String.format("%s,%.2f,%.2f,%.2f,%.2f,%.2f",
-                    location.getWorld().getName(),
-                    location.getX(),
-                    location.getY(),
-                    location.getZ(),
-                    location.getYaw(),
-                    location.getPitch());
-            rawPoints.add(formattedLocation);
+    private void validateConfig() {
+        if (spawnRegions.isEmpty()) {
+            plugin.getLogger().warning("No valid spawn regions found.");
         }
-        config.set("spawnpoints", rawPoints);
-        saveConfig();
-    }
-
-    public boolean verifyRegionConfig() {
-        String worldName = config.getString("spawn-region.world");
-        String regionName = config.getString("spawn-region.region");
-
-        if (worldName == null || regionName == null) {
-            plugin.getLogger().severe("Mandatory configuration keys 'world' or 'region' are missing.");
-            spawnWorld = null;
-            spawnRegion = null;
-            return false;
+        if (!Arrays.asList("sequential", "shuffle", "random").contains(teleportMode)) {
+            plugin.getLogger().warning("Invalid teleport mode: " + teleportMode
+                    + ", defaulting to 'shuffle'.");
+            teleportMode = "shuffle";
         }
-
-        spawnWorld = Bukkit.getWorld(worldName);
-        if (spawnWorld == null) {
-            plugin.getLogger().severe("Configured world '" + worldName + "' does not exist.");
-            spawnRegion = null;
-            return false;
-        }
-
-        RegionManager regionManager = WorldGuard.getInstance()
-                .getPlatform()
-                .getRegionContainer()
-                .get(BukkitAdapter.adapt(spawnWorld));
-        if (regionManager == null) {
-            plugin.getLogger().severe("No RegionManager found for world '" + worldName + "'.");
-            spawnRegion = null;
-            return false;
-        }
-
-        spawnRegion = regionManager.getRegion(regionName);
-        if (spawnRegion == null) {
-            plugin.getLogger().warning("The configured spawn region '" + regionName + "' does not exist.");
-            plugin.getLogger().warning("Please create it in WorldGuard or update spawn.yml.");
-            return false;
-        }
-
-        return true;
-    }
-
-    public World getSpawnWorld() {
-        return spawnWorld;
-    }
-
-    public ProtectedRegion getSpawnRegion() {
-        return spawnRegion;
-    }
-
-    public void verifyTeleportMode() {
-        String mode = config.getString("teleport-mode", "shuffle").toLowerCase();
-        if (!mode.equals("sequential") && !mode.equals("shuffle") && !mode.equals("random")) {
-            plugin.getLogger().severe("Invalid teleport mode: " + mode + ". Defaulting to 'shuffle'.");
-            config.set("teleport-mode", "shuffle");
-            saveConfig();
+        if (teleportDelay < 0) {
+            plugin.getLogger().warning("Teleport delay < 0, defaulting to 3.");
+            teleportDelay = 3;
         }
     }
 
-    public void saveConfig() {
-        try {
-            config.save(configFile);
-            plugin.getLogger().info("Configuration saved successfully.");
-        } catch (IOException e) {
-            plugin.getLogger().severe("Failed to save configuration: " + e.getMessage());
-        }
+    // ========== Getters ==========
+    public List<SpawnRegion> getSpawnRegions() {
+        return new ArrayList<>(spawnRegions);
+    }
+
+    public String getTeleportMode() {
+        return teleportMode;
     }
 
     public int getTeleportDelay() {
         return teleportDelay;
     }
 
-    public FileConfiguration getConfig() {
-        return config;
+    public int getTeleportYOffset() {
+        return teleportYOffset;
     }
 
+    // ========== Setters ==========
+    public void setTeleportMode(String mode) {
+        if (Arrays.asList("sequential", "shuffle", "random").contains(mode)) {
+            teleportMode = mode;
+        } else {
+            plugin.getLogger().warning("Invalid mode: " + mode + ", ignoring.");
+        }
+    }
+
+    public void setTeleportDelay(int delay) {
+        if (delay >= 0) {
+            teleportDelay = delay;
+        } else {
+            plugin.getLogger().warning("Delay < 0, ignoring.");
+        }
+    }
+
+    public void setTeleportYOffset(int offset) {
+        teleportYOffset = offset;
+    }
+
+    /**
+     * Add a new spawn point to an existing region.
+     * If region not found, logs warning and does nothing.
+     * Saves config after insertion.
+     */
+    public void addSpawnPoint(World world, String regionName, Location location) {
+        if (world == null || regionName == null || location == null) {
+            plugin.getLogger().warning("Invalid data for addSpawnPoint");
+            return;
+        }
+        for (SpawnRegion sr : spawnRegions) {
+            if (sr.getWorld().equals(world)
+                    && sr.getRegion().getId().equals(regionName)) {
+                sr.addSpawnPoint(location);
+                plugin.getLogger().info("Spawn point added to region "
+                        + regionName + " in " + world.getName());
+                saveConfig();
+                return;
+            }
+        }
+        plugin.getLogger().warning("Region [" + regionName
+                + "] not found in world [" + world.getName() + "].");
+    }
+
+    public void saveConfig() {
+        List<Map<String, Object>> regionsConfig = new ArrayList<>();
+        for (SpawnRegion sr : spawnRegions) {
+            Map<String, Object> regionData = new HashMap<>();
+            regionData.put("world", sr.getWorld().getName());
+            regionData.put("region", sr.getRegion().getId());
+
+            List<String> rawPoints = new ArrayList<>();
+            for (Location loc : sr.getSpawnPoints()) {
+                String fmt = String.format("%.2f,%.2f,%.2f,%.2f,%.2f",
+                        loc.getX(), loc.getY(), loc.getZ(),
+                        loc.getYaw(), loc.getPitch());
+                rawPoints.add(fmt);
+            }
+            regionData.put("spawnpoints", rawPoints);
+            regionsConfig.add(regionData);
+        }
+        config.set("spawn-regions", regionsConfig);
+        config.set("teleport-mode", teleportMode);
+        config.set("teleport-delay", teleportDelay);
+        config.set("teleport-y-offset", teleportYOffset);
+
+        try {
+            config.save(configFile);
+            plugin.getLogger().info("Configuration saved to spawn.yml.");
+        } catch (IOException e) {
+            plugin.getLogger().severe("Failed to save config: " + e.getMessage());
+        }
+    }
+
+    public void clearSpawnPointsInRegion(String regionName) {
+        for (SpawnRegion sr : spawnRegions) {
+            if (sr.getRegion().getId().equals(regionName)) {
+                sr.clearSpawnPoints();
+                plugin.getLogger().info("Spawn points cleared for region: " + regionName);
+                saveConfig();
+                return;
+            }
+        }
+        plugin.getLogger().warning("Region " + regionName + " not found. No points cleared.");
+    }
 }

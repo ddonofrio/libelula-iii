@@ -1,28 +1,36 @@
 # Spawn configuration file for the Spawn plugin.
 
-# List of spawnpoints:
-# Each spawnpoint must follow the format:
-#   world,x,y,z,yaw,pitch
-# Example:
-#   world,100.5,64.0,-200.0,90.0,0.0
-spawnpoints: []
+# List of spawn regions:
+# Each region has:
+#   - world: The world the region is in.
+#   - region: The WorldGuard region name.
+#   - spawnpoints: List of spawnpoints in the region.
+# Example structure:
+#   - world: my_world
+#     region: spawn_region
+#     spawnpoints:
+#       - world,100.5,64.0,-200.0,90.0,0.0
+#       - world,101.0,64.0,-201.0,180.0,0.0
+spawn-regions:
+  - world: world
+    region: spawn
+    spawnpoints: []
 
 # Teleportation mode:
-# Defines how players are teleported to the spawnpoints.
+# Defines how players are teleported to the spawn points within a region.
 # Options:
-#   - sequential: Teleports players sequentially through the spawnpoints list.
-#   - shuffle (default): Teleports players to all spawnpoints without repetition
+#   - sequential: Teleports players sequentially through the spawn points list.
+#   - shuffle (default): Teleports players to all spawn points without repetition
 #                        before starting over, similar to a "shuffle play" mode.
-#   - random: Teleports players to a completely random spawnpoint every time.
+#   - random: Teleports players to a completely random spawn point every time.
 teleport-mode: shuffle
 
-# Spawn region configuration:
-# Defines the world and region name to be protected using WorldGuard.
-# Example:
-#   world: my_world
-#   region: spawn_region
-spawn-region:
-  world: world
-  region: spawn
-
 teleport-delay: 3 # Default delay in seconds before teleporting the player.
+  # Options:
+  #   - Set to any positive integer to define the delay in seconds.
+  #   - 0 disables the delay, teleporting instantly.
+
+teleport-y-offset: 1 # Default offset in blocks added to the Y-coordinate of spawn points.
+  # Options:
+  #   - Set to any positive or negative integer to define the offset.
+  #   - 0 applies no offset.
