@@ -19,34 +19,34 @@ permissions:
     description: "Allows the player to bypass teleport delay"
     default: false
   spawn.player.use.spawn.0:
-    description: "Allows the player to teleport to the first spawn region"
+    description: "Spawn command teleport the player to the first spawn region"
     default: false
   spawn.player.use.spawn.1:
-    description: "Allows the player to teleport to the second spawn region"
+    description: "Spawn command teleport the player to the second spawn region"
     default: false
   spawn.player.use.spawn.2:
-    description: "Allows the player to teleport to the third spawn region"
+    description: "Spawn command teleport the player to the third spawn region"
     default: false
   spawn.player.use.spawn.3:
-    description: "Allows the player to teleport to the fourth spawn region"
+    description: "Spawn command teleport the player to the fourth spawn region"
     default: false
   spawn.player.use.spawn.4:
-    description: "Allows the player to teleport to the fifth spawn region"
+    description: "Spawn command teleport the player to the fifth spawn region"
     default: false
   spawn.player.use.spawn.5:
-    description: "Allows the player to teleport to the sixth spawn region"
+    description: "Spawn command teleport the player to the sixth spawn region"
     default: false
   spawn.player.use.spawn.6:
-    description: "Allows the player to teleport to the seventh spawn region"
+    description: "Spawn command teleport the player to the seventh spawn region"
     default: false
   spawn.player.use.spawn.7:
-    description: "Allows the player to teleport to the eighth spawn region"
+    description: "Spawn command teleport the player to the eighth spawn region"
     default: false
   spawn.player.use.spawn.8:
-    description: "Allows the player to teleport to the ninth spawn region"
+    description: "Spawn command teleport the player to the ninth spawn region"
     default: false
   spawn.player.use.spawn.9:
-    description: "Allows the player to teleport to the tenth spawn region"
+    description: "Spawn command teleport the player to the tenth spawn region"
     default: false
 commands:
   spawn:
